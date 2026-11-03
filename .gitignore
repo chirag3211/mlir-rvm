@@ -15,4 +15,5 @@ __pycache__/
 *.nog
 trap_*.txt
 loops.txt
+SHA256SUMS
 d2a_attr.txt
