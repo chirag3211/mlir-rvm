@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MLIR-RVM vs riscv-dnn instruction histograms</title>
+<style>
+:root {
+  --bg: #fbfbf9; --panel: #ffffff; --fg: #1d2127; --muted: #5d6672; --line: #dfe2e6; --grid: #e9ebee; --axis: #aab1ba;
+  --c1: #2f6fb3; --c2: #d9822b; --pop: #ffffff; --shadow: 0 4px 14px rgba(20,30,45,.14);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14181d; --panel: #1b2027; --fg: #e8ebee; --muted: #9aa4af; --line: #2c333c; --grid: #262c34; --axis: #4a535e;
+    --c1: #6aa6e6; --c2: #f0a45a; --pop: #232a32; --shadow: 0 4px 14px rgba(0,0,0,.45); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14181d; --panel: #1b2027; --fg: #e8ebee; --muted: #9aa4af; --line: #2c333c; --grid: #262c34; --axis: #4a535e;
+  --c1: #6aa6e6; --c2: #f0a45a; --pop: #232a32; --shadow: 0 4px 14px rgba(0,0,0,.45); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding: 28px max(16px, env(safe-area-inset-left)) 48px max(16px, env(safe-area-inset-right)); }
+.page { max-width: 1120px; margin-inline: auto; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: 1.9rem; line-height: 1.2; margin: 0 0 8px; text-wrap: balance; }
+h2 { font-size: 1rem; font-weight: 600; margin: 0; }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 70ch; line-height: 1.5; }
+.lede b, .tile b { font-weight: 600; color: var(--fg); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: 12px; }
+.tile, .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; min-width: 0; }
+.tile { display: flex; flex-direction: column; gap: 4px; }
+.tile .lab { color: var(--muted); font-size: .8rem; }
+.tile .big { font-family: Georgia, "Times New Roman", serif; font-size: 2rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile .cmp { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr)); gap: 12px; }
+.card { display: flex; flex-direction: column; gap: 10px; }
+.note { color: var(--muted); font-size: .8rem; line-height: 1.45; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: .8rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+.s0 { background: var(--c1); } .s1 { background: var(--c2); }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: auto; }
+.chart text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+.chart text.v { fill: var(--fg); font-variant-numeric: tabular-nums; }
+.tip { position: absolute; pointer-events: none; background: var(--pop); border: 1px solid var(--line); border-radius: 6px; box-shadow: var(--shadow);
+  padding: 4px 10px; font-size: .8rem; white-space: nowrap; z-index: 2; font-variant-numeric: tabular-nums; }
+.tip .t { color: var(--muted); }
+.tip .sw { margin-right: 6px; }
+input[type=search] { font: inherit; font-size: .8rem; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); width: min(100%, 16rem); }
+input[type=search]:focus-visible, .sort:focus-visible { outline: 2px solid var(--c1); outline-offset: 2px; }
+.tablebox { max-height: 26rem; overflow: auto; border-top: 1px solid var(--line); }
+table { border-collapse: collapse; width: 100%; font-size: .8rem; font-variant-numeric: tabular-nums; }
+th { position: sticky; top: 0; background: var(--panel); text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--line); font-weight: 600; white-space: nowrap; }
+td { text-align: right; padding: 5px 10px; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; }
+td:first-child { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.sort { font: inherit; font-weight: inherit; background: none; border: 0; color: inherit; cursor: pointer; padding: 0; }
+.sort:hover { text-decoration: underline; }
+th[aria-sort=ascending] .sort::after { content: " \2191"; }
+th[aria-sort=descending] .sort::after { content: " \2193"; }
+.foot { color: var(--muted); font-size: .8rem; max-width: 75ch; line-height: 1.45; }
+@media (prefers-reduced-motion: no-preference) { .tile { animation: rise .3s ease-out both; } }
+@keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>MLIR-RVM vs riscv-dnn: executed instructions</h1>
+    <p class="lede">ResNet-50 inference on spike with the RISC-V matrix extension. The MLIR-lowered program executes <b id="l-mlir"></b> instructions and riscv-dnn executes <b id="l-dnn"></b>, a difference of <b id="l-pct"></b>.</p>
+  </header>
+
+  <section class="tiles" aria-label="Headline figures" id="tiles"></section>
+
+  <section class="grid" aria-label="By category">
+    <div class="card">
+      <h2>Instructions by category</h2>
+      <p class="note">Executed instruction count per category. The matrix categories match closely; scalar integer code is where the two programs differ.</p>
+      <div class="legend"><span><i class="sw s0"></i>MLIR-RVM</span><span><i class="sw s1"></i>riscv-dnn</span></div>
+      <div class="chart" id="chart-cat"></div>
+    </div>
+    <div class="card">
+      <h2>Where the difference comes from</h2>
+      <p class="note">MLIR-RVM minus riscv-dnn, per category. A bar to the left of zero means the MLIR program executes fewer instructions.</p>
+      <div class="chart" id="chart-diff"></div>
+    </div>
+  </section>
+
+  <section class="grid" aria-label="Instruction detail">
+    <div class="card">
+      <h2>Largest matrix instructions</h2>
+      <p class="note">Matrix instructions executed at least 200,000 times by either program. The multiply-accumulate, load and tile-size counts agree to within a few hundred.</p>
+      <div class="legend"><span><i class="sw s0"></i>MLIR-RVM</span><span><i class="sw s1"></i>riscv-dnn</span></div>
+      <div class="chart" id="chart-mat"></div>
+    </div>
+    <div class="card">
+      <h2>Common scalar instructions</h2>
+      <p class="note">Mnemonics that appear in the top 20 of both programs. The two compiled programs pick different integer forms for address arithmetic, so some mnemonics rank high in only one list and are not shown.</p>
+      <div class="legend"><span><i class="sw s0"></i>MLIR-RVM</span><span><i class="sw s1"></i>riscv-dnn</span></div>
+      <div class="chart" id="chart-sc"></div>
+    </div>
+  </section>
+
+  <section class="card" aria-label="All matrix instructions">
+    <h2>All matrix instructions</h2>
+    <p class="note">Every matrix-unit mnemonic seen in either program. Select a column heading to sort.</p>
+    <div><input id="matrix-q" type="search" placeholder="Filter by mnemonic" aria-label="Filter by mnemonic"></div>
+    <div class="tablebox">
+      <table>
+        <thead><tr>
+          <th><button class="sort" data-key="mnemonic">Instruction</button></th>
+          <th><button class="sort" data-key="mlir">MLIR-RVM</button></th>
+          <th><button class="sort" data-key="dnn">riscv-dnn</button></th>
+          <th><button class="sort" data-key="diff">Difference</button></th>
+          <th><button class="sort" data-key="pct">Change</button></th>
+        </tr></thead>
+        <tbody id="matrix-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="foot">Counts come from spike instruction traces of the MLIR-lowered ResNet-50 and of riscv-dnn's ResNet-50, run with the isa string rv64gcv_zfh_zvfh_matrix and summarised by compare_histograms.py. The two programs run different networks, so totals are comparable in kind, not instruction for instruction. Every number on this page is embedded in the file; nothing is loaded from the network.</p>
+</div>
+
+<script>
+(function () {
+  // ---- data (executed instruction counts from compare_histograms.py) ----
+  var CATEGORIES = [{"category": "Matrix: config (mset*)", "group": "matrix", "mlir": 45827755, "dnn": 45749688}, {"category": "Matrix: load (ml*)", "group": "matrix", "mlir": 17813376, "dnn": 17668480}, {"category": "Matrix: store (ms*)", "group": "matrix", "mlir": 239101, "dnn": 262910}, {"category": "Matrix: multiply-accumulate", "group": "matrix", "mlir": 8654336, "dnn": 8654592}, {"category": "Matrix: convert (mf*cvt)", "group": "matrix", "mlir": 175613, "dnn": 175614}, {"category": "Matrix: other (elementwise, broadcast)", "group": "matrix", "mlir": 958589, "dnn": 1078910}, {"category": "Vector (v*)", "group": "vector", "mlir": 105624, "dnn": 101285}, {"category": "Scalar load", "group": "scalar", "mlir": 4063727, "dnn": 3370267}, {"category": "Scalar store", "group": "scalar", "mlir": 515371, "dnn": 394601}, {"category": "Scalar FP arithmetic", "group": "scalar", "mlir": 262059, "dnn": 126}, {"category": "Branch / jump / call", "group": "control", "mlir": 14148534, "dnn": 13042322}, {"category": "Scalar integer ALU / other", "group": "scalar", "mlir": 121915975, "dnn": 139651262}];
+  var MATRIX = [{"mnemonic": "msettypei", "mlir": 18018817, "dnn": 17979719}, {"mnemonic": "msettypehi", "mlir": 18018817, "dnn": 17979719}, {"mnemonic": "msettilek", "mlir": 8654336, "dnn": 8654592}, {"mnemonic": "mlbe16.m", "mlir": 8654336, "dnn": 8654592}, {"mnemonic": "mfwma.mm", "mlir": 8654336, "dnn": 8654592}, {"mnemonic": "mlufae16.m", "mlir": 8654336, "dnn": 8622336}, {"mnemonic": "msetsk", "mlir": 952317, "dnn": 952192}, {"mnemonic": "mlce16.m", "mlir": 504704, "dnn": 359296}, {"mnemonic": "mbccr.m", "mlir": 278272, "dnn": 272000}, {"mnemonic": "msce16.m", "mlir": 239101, "dnn": 262910}, {"mnemonic": "mfadd.mm", "mlir": 226432, "dnn": 223296}, {"mnemonic": "msettilen", "mlir": 175613, "dnn": 175614}, {"mnemonic": "mfncvt.f.fw.m", "mlir": 175613, "dnn": 175614}, {"mnemonic": "mfsub.f.mm", "mlir": 175613, "dnn": 175488}, {"mnemonic": "mfmax.mm", "mlir": 139136, "dnn": 136000}, {"mnemonic": "mfmul.mm", "mlir": 139136, "dnn": 136000}, {"mnemonic": "mfsub.mm", "mlir": 0, "dnn": 136126}, {"mnemonic": "mlae16.m", "mlir": 0, "dnn": 32256}, {"mnemonic": "msettilem", "mlir": 7693, "dnn": 7693}, {"mnemonic": "msetoutsh", "mlir": 54, "dnn": 53}, {"mnemonic": "msetpadval", "mlir": 54, "dnn": 53}, {"mnemonic": "msetinsh", "mlir": 54, "dnn": 53}];
+  var SCALAR = [{"mnemonic": "add", "mlir": 48413513, "dnn": 39442794}, {"mnemonic": "slli", "mlir": 26934110, "dnn": 19085661}, {"mnemonic": "addw", "mlir": 9743457, "dnn": 21211757}, {"mnemonic": "sext.w", "mlir": 8883505, "dnn": 10735181}, {"mnemonic": "subw", "mlir": 8845491, "dnn": 8861398}, {"mnemonic": "blt", "mlir": 8789241, "dnn": 8654718}, {"mnemonic": "srli", "mlir": 4939486, "dnn": 8655526}, {"mnemonic": "ld", "mlir": 3758870, "dnn": 3366254}, {"mnemonic": "beqz", "mlir": 3034681, "dnn": 1512731}, {"mnemonic": "li", "mlir": 1660651, "dnn": 1434655}, {"mnemonic": "or", "mlir": 1616822, "dnn": 1906207}];
+
+  // ---- formatting ----
+  var compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+  var compact2 = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 2 });
+  var full = new Intl.NumberFormat('en');
+  function pct(v) { var t = (Math.abs(v) * 100).toFixed(1); if (t === '0.0') return '0.0%'; return (v < 0 ? '−' : '+') + t + '%'; }
+  function signed(n) { return (n < 0 ? '−' : n > 0 ? '+' : '') + compact2.format(Math.abs(n)); }
+  function sum(rows, k) { return rows.reduce(function (a, r) { return a + r[k]; }, 0); }
+  function rel(a, b) { return (a - b) / b; }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  var NS = 'http://www.w3.org/2000/svg';
+  function sv(tag, attrs, text) { var e = document.createElementNS(NS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; }
+
+  // ---- derived totals ----
+  var matrixCats = CATEGORIES.filter(function (r) { return r.group === 'matrix'; });
+  var scalarInt = CATEGORIES.filter(function (r) { return r.category === 'Scalar integer ALU / other'; })[0];
+  var mac = MATRIX.filter(function (r) { return r.mnemonic === 'mfwma.mm'; })[0];
+  var T = {
+    totalM: sum(CATEGORIES, 'mlir'), totalD: sum(CATEGORIES, 'dnn'),
+    matM: sum(matrixCats, 'mlir'), matD: sum(matrixCats, 'dnn'),
+    macM: mac.mlir, macD: mac.dnn, intM: scalarInt.mlir, intD: scalarInt.dnn
+  };
+  document.getElementById('l-mlir').textContent = compact.format(T.totalM);
+  document.getElementById('l-dnn').textContent = compact.format(T.totalD);
+  document.getElementById('l-pct').textContent = pct(rel(T.totalM, T.totalD));
+
+  var tiles = [
+    ['All instructions', T.totalM, T.totalD],
+    ['Matrix instructions', T.matM, T.matD],
+    ['Matrix multiply-accumulates (mfwma)', T.macM, T.macD],
+    ['Scalar integer instructions', T.intM, T.intD]
+  ];
+  var tilesEl = document.getElementById('tiles');
+  tiles.forEach(function (t) {
+    var d = el('div', 'tile');
+    d.appendChild(el('span', 'lab', t[0]));
+    d.appendChild(el('span', 'big', compact.format(t[1])));
+    var c = el('span', 'cmp', 'riscv-dnn ');
+    c.appendChild(el('b', null, compact.format(t[2])));
+    c.appendChild(document.createTextNode(' · '));
+    c.appendChild(el('b', null, pct(rel(t[1], t[2]))));
+    d.appendChild(c);
+    tilesEl.appendChild(d);
+  });
+
+  // ---- chart helpers ----
+  function niceTicks(lo, hi, n) {
+    var span = hi - lo || 1, step = Math.pow(10, Math.floor(Math.log10(span / n))), err = (span / n) / step;
+    step *= err >= 7 ? 10 : err >= 3 ? 5 : err >= 1.5 ? 2 : 1;
+    var out = [];
+    for (var t = Math.ceil(lo / step) * step; t <= hi + step * 1e-9; t += step) out.push(Math.round(t / step) * step);
+    return out;
+  }
+  function textWidth(svg, strings, cls) {
+    var t = sv('text', cls ? { 'class': cls } : {}); svg.appendChild(t); var w = 0;
+    strings.forEach(function (s) { t.textContent = s; w = Math.max(w, t.getComputedTextLength()); });
+    svg.removeChild(t); return w;
+  }
+  function tooltip(host) {
+    var tip = el('div', 'tip'); tip.hidden = true; host.appendChild(tip);
+    return {
+      show: function (e, head, lines) {
+        tip.replaceChildren(); tip.appendChild(el('div', 't', head));
+        lines.forEach(function (l) { var d = el('div'); d.appendChild(el('i', 'sw ' + l.cls)); d.appendChild(document.createTextNode(l.text)); tip.appendChild(d); });
+        tip.hidden = false;
+        var b = host.getBoundingClientRect(), x = e.clientX - b.left + 12, y = e.clientY - b.top + 12;
+        if (x + tip.offsetWidth > b.width) x = Math.max(0, e.clientX - b.left - tip.offsetWidth - 12);
+        tip.style.left = x + 'px'; tip.style.top = y + 'px';
+      },
+      hide: function () { tip.hidden = true; }
+    };
+  }
+
+  function grouped(host, rows0, labelKey, min) {
+    var rows = rows0.filter(function (r) { return Math.max(r.mlir, r.dnn) >= (min || 0); })
+      .sort(function (a, b) { return Math.max(b.mlir, b.dnn) - Math.max(a.mlir, a.dnn); });
+    var w = Math.max(280, host.clientWidth), narrow = w < 520, lh = narrow ? 16 : 0, rowH = 40 + lh, bar = 13, gap = 2, top = 6, axisH = 22, H = top + rows.length * rowH + axisH;
+    var svg = sv('svg', { viewBox: '0 0 ' + w + ' ' + H, role: 'img' });
+    host.replaceChildren(svg);
+    var left = narrow ? 2 : Math.min(w * 0.4, textWidth(svg, rows.map(function (r) { return r[labelKey]; })) + 12);
+    var right = textWidth(svg, rows.reduce(function (a, r) { return a.concat([compact2.format(r.mlir), compact2.format(r.dnn)]); }, []), 'v') + 10;
+    var max = Math.max.apply(null, rows.map(function (r) { return Math.max(r.mlir, r.dnn); })) || 1;
+    function x(v) { return left + (v / max) * (w - right - left); }
+    niceTicks(0, max, 4).forEach(function (t) {
+      svg.appendChild(sv('line', { x1: x(t), x2: x(t), y1: top, y2: H - axisH, stroke: 'var(--grid)' }));
+      svg.appendChild(sv('text', { x: x(t), y: H - 6, 'text-anchor': 'middle' }, compact.format(t)));
+    });
+    var tip = tooltip(host);
+    rows.forEach(function (r, i) {
+      var y0 = top + i * rowH, yb = y0 + lh + (rowH - lh - 2 * bar - gap) / 2;
+      if (narrow) svg.appendChild(sv('text', { x: left, y: y0 + 12 }, r[labelKey]));
+      else svg.appendChild(sv('text', { x: left - 8, y: y0 + rowH / 2 + 4, 'text-anchor': 'end' }, r[labelKey]));
+      ['mlir', 'dnn'].forEach(function (k, s) {
+        var yy = yb + s * (bar + gap);
+        svg.appendChild(sv('rect', { x: left, y: yy, width: Math.max(0, x(r[k]) - left), height: bar, rx: 2, fill: s ? 'var(--c2)' : 'var(--c1)' }));
+        svg.appendChild(sv('text', { 'class': 'v', x: x(r[k]) + 5, y: yy + bar - 2 }, compact2.format(r[k])));
+      });
+      var hit = sv('rect', { x: 0, y: y0, width: w, height: rowH, fill: 'transparent' });
+      hit.addEventListener('pointermove', function (e) { tip.show(e, r[labelKey], [{ cls: 's0', text: 'MLIR-RVM ' + full.format(r.mlir) }, { cls: 's1', text: 'riscv-dnn ' + full.format(r.dnn) }]); });
+      hit.addEventListener('pointerleave', tip.hide);
+      svg.appendChild(hit);
+    });
+  }
+
+  function diverge(host) {
+    var rows = CATEGORIES.map(function (r) { return { category: r.category, diff: r.mlir - r.dnn }; }).sort(function (a, b) { return a.diff - b.diff; });
+    var w = Math.max(280, host.clientWidth), narrow = w < 520, lh = narrow ? 16 : 0, rowH = 30 + lh, bar = 16, top = 6, axisH = 22, H = top + rows.length * rowH + axisH;
+    var svg = sv('svg', { viewBox: '0 0 ' + w + ' ' + H, role: 'img' });
+    host.replaceChildren(svg);
+    var left = narrow ? 2 : Math.min(w * 0.4, textWidth(svg, rows.map(function (r) { return r.category; })) + 12);
+    var right = textWidth(svg, rows.map(function (r) { return signed(r.diff); }), 'v') + 10;
+    var lo = Math.min(0, Math.min.apply(null, rows.map(function (r) { return r.diff; }))), hi = Math.max(0, Math.max.apply(null, rows.map(function (r) { return r.diff; })));
+    var ticks = niceTicks(lo, hi, 4); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
+    function x(v) { return left + ((v - lo) / (hi - lo)) * (w - right - left); }
+    ticks.forEach(function (t) {
+      svg.appendChild(sv('line', { x1: x(t), x2: x(t), y1: top, y2: H - axisH, stroke: t === 0 ? 'var(--axis)' : 'var(--grid)' }));
+      svg.appendChild(sv('text', { x: x(t), y: H - 6, 'text-anchor': 'middle' }, t === 0 ? '0' : signed(t)));
+    });
+    var tip = tooltip(host);
+    rows.forEach(function (r, i) {
+      var y0 = top + i * rowH, yy = y0 + lh + (rowH - lh - bar) / 2;
+      if (narrow) svg.appendChild(sv('text', { x: left, y: y0 + 12 }, r.category));
+      else svg.appendChild(sv('text', { x: left - 8, y: y0 + rowH / 2 + 4, 'text-anchor': 'end' }, r.category));
+      svg.appendChild(sv('rect', { x: Math.min(x(0), x(r.diff)), y: yy, width: Math.abs(x(r.diff) - x(0)), height: bar, rx: 2, fill: 'var(--c1)' }));
+      svg.appendChild(sv('text', { 'class': 'v', x: w - 2, y: yy + bar - 3, 'text-anchor': 'end' }, signed(r.diff)));
+      var hit = sv('rect', { x: 0, y: y0, width: w, height: rowH, fill: 'transparent' });
+      hit.addEventListener('pointermove', function (e) { tip.show(e, r.category, [{ cls: 's0', text: 'Difference ' + (r.diff < 0 ? '−' : '+') + full.format(Math.abs(r.diff)) }]); });
+      hit.addEventListener('pointerleave', tip.hide);
+      svg.appendChild(hit);
+    });
+  }
+
+  // ---- table ----
+  var ROWS = MATRIX.map(function (r) { return { mnemonic: r.mnemonic, mlir: r.mlir, dnn: r.dnn, diff: r.mlir - r.dnn, pct: r.dnn ? (r.mlir - r.dnn) / r.dnn : null }; });
+  var st = { key: 'dnn', dir: -1, q: '' };
+  function drawTable() {
+    var rows = ROWS.filter(function (r) { return !st.q || r.mnemonic.toLowerCase().indexOf(st.q) >= 0; }).sort(function (a, b) {
+      var va = a[st.key], vb = b[st.key];
+      if (va == null) return 1; if (vb == null) return -1;
+      return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * st.dir;
+    });
+    var tb = document.getElementById('matrix-body'); tb.replaceChildren();
+    rows.forEach(function (r) {
+      var tr = el('tr');
+      [r.mnemonic, full.format(r.mlir), full.format(r.dnn), (r.diff < 0 ? '−' : r.diff > 0 ? '+' : '') + full.format(Math.abs(r.diff)), r.pct == null ? '—' : pct(r.pct)]
+        .forEach(function (t) { tr.appendChild(el('td', null, t)); });
+      tb.appendChild(tr);
+    });
+    document.querySelectorAll('th').forEach(function (th) {
+      var b = th.querySelector('.sort');
+      th.setAttribute('aria-sort', b && b.dataset.key === st.key ? (st.dir > 0 ? 'ascending' : 'descending') : 'none');
+    });
+  }
+  document.querySelectorAll('.sort').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (st.key === b.dataset.key) st.dir = -st.dir; else { st.key = b.dataset.key; st.dir = b.dataset.key === 'mnemonic' ? 1 : -1; }
+      drawTable();
+    });
+  });
+  document.getElementById('matrix-q').addEventListener('input', function (e) { st.q = e.target.value.trim().toLowerCase(); drawTable(); });
+
+  function drawAll() {
+    grouped(document.getElementById('chart-cat'), CATEGORIES, 'category', 0);
+    diverge(document.getElementById('chart-diff'));
+    grouped(document.getElementById('chart-mat'), MATRIX, 'mnemonic', 200000);
+    grouped(document.getElementById('chart-sc'), SCALAR, 'mnemonic', 0);
+  }
+  drawAll(); drawTable();
+  var lastW = document.body.clientWidth, timer;
+  window.addEventListener('resize', function () {
+    clearTimeout(timer);
+    timer = setTimeout(function () { if (document.body.clientWidth !== lastW) { lastW = document.body.clientWidth; drawAll(); } }, 120);
+  });
+})();
+</script>
+</body>
+</html>
